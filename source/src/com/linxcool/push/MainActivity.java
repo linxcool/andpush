@@ -4,39 +4,32 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.view.MotionEvent;
 
-public class MainActivity extends Activity implements PushCallback{
+public class MainActivity extends Activity{
 
-	private int notifyId = 1;
+	public int notifyId = 1;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_main);
-		
-		PushService.registPushCallback(notifyId, this);
+		//setContentView(R.layout.activity_main);
 	}
 
 	public boolean onTouchEvent(MotionEvent event) {
 		if(event.getAction() == MotionEvent.ACTION_UP){
-			PushService.setDelayNotify(
-					this, 2000, notifyId, 
-					"您有一条新的通知，请注意查收！",
-					"临克斯提醒", 
-					"精彩好礼送不停，快来签到吧！");
-			System.out.println("setDelayNotify");
+			
+			String ticker = "您有一条新的通知，请注意查收！";
+			String title = "临克斯提醒";
+			String body = "精彩好礼送不停，快来签到吧！";
+			
+			long sampleTime = System.currentTimeMillis() + 2000;
+			
+			//SimplePushHelper.setRepeatingNotify(this, sampleTime, 5000, ticker, title, body);
+			SimplePushHelper.setOneTimeNotify(this, sampleTime, ticker, title, body);
+			
+			System.out.println("setRepeatingNotify");
+			
 		}
 		return super.onTouchEvent(event);
 	}
-
-	@Override
-	public void onNotificationShowed(int id) {
-		System.out.println("onNotificationShowed");
-	}
-
-	@Override
-	public void onNotificationClicked(int id) {
-		System.out.println("onNotificationClicked");
-	}
-
 
 }

@@ -11,7 +11,6 @@ import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.os.IBinder;
 import android.util.Log;
-import android.util.SparseArray;
 
 /**
  * 推送服务
@@ -24,49 +23,23 @@ public class PushService extends Service {
 	public static final int REQUEST_CODE = PushService.class.getName().hashCode();
 
 	private static final String DATA_FILE_NAME = "pushService";
-	private static final String KEY_NOTIFY_ID = "notify_id";
+	public static final String KEY_NOTIFY_ID = "notify_id";
 	private static final String KEY_TICKER = "notify_ticker";
 	private static final String KEY_TITLE = "notify_title";
 	private static final String KEY_BODY = "notify_body";
 
-	private static SparseArray<PushCallback> callbacks;
-	
-	/**
-	 * 注册push回调
-	 * @param notifyId
-	 * @param callback
-	 */
-	public static void registPushCallback(int notifyId, PushCallback callback){
-		if(callbacks == null){
-			callbacks = new SparseArray<PushCallback>();
-		}
-		callbacks.put(notifyId, callback);
-	}
-	
-	/**
-	 * 取消push回调
-	 * @param notifyId
-	 */
-	public static void unregistPushCallback(int notifyId){
-		if(callbacks == null){
-			return;
-		}
-		callbacks.remove(notifyId);
-	}
-	
-	private static PushCallback getPushCallback(int notifyId){
-		if(callbacks == null){
-			return null;
-		}
-		return callbacks.get(notifyId);
-	}
+	public static final String KEY_BROADCAST_TYPE = "broadcast_type";
+	public static final int BROADCAST_TYPE_SHOWED_NOTIFY = 0;
+	public static final int BROADCAST_TYPE_CLICKED_NOTIFY = 1;
 	
 	/**
 	 * 注册重复通知
 	 * @param context 上下文对象
+	 * @param firstTime 第一次通知的时间（毫秒）
 	 * @param intervalMillis 重复间隔（毫秒）
 	 */
-	public static void setRepeatingNotify(Context context, long intervalMillis, 
+	public static void setRepeatingNotify(Context context, 
+			long firstTime, long intervalMillis, 
 			int id, String ticker, String title, String body){
 		saveData(context, id, KEY_TICKER, ticker);
 		saveData(context, id, KEY_TITLE, title);
@@ -77,7 +50,7 @@ public class PushService extends Service {
 		PendingIntent operation = PendingIntent.getService(context, REQUEST_CODE, service, Intent.FLAG_ACTIVITY_NEW_TASK);
 
 		AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-		alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), intervalMillis, operation);
+		alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, firstTime, intervalMillis, operation);
 	}
 	
 	/**
@@ -97,6 +70,25 @@ public class PushService extends Service {
 
 		AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 		alarmManager.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + delayMillis, operation);
+	}
+	
+	/**
+	 * 取消通知
+	 * @param context
+	 * @param id
+	 */
+	public static void cancelNotify(Context context, int id){
+		NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+		nm.cancel(id);
+	}
+	
+	/**
+	 * 取消所有通知
+	 * @param context
+	 */
+	public static void cancelAllNotify(Context context){
+		NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+		nm.cancelAll();
 	}
 	
 	/**
@@ -129,6 +121,12 @@ public class PushService extends Service {
 		return preferences.getString(id + "_" + key, null);
 	}
 	
+	public static void clearData(Context context){
+		SharedPreferences preferences = context.getSharedPreferences(
+				DATA_FILE_NAME, Context.MODE_PRIVATE);
+		preferences.edit().clear().commit();
+	}
+	
 	@Override
 	public IBinder onBind(Intent intent) {
 		return null;
@@ -143,22 +141,21 @@ public class PushService extends Service {
 		
 		String action = intent.getAction();
 		
-		if(intent.getAction() == null){
+		if(action == null){
 			stopSelf();
 			return super.onStartCommand(intent, flags, startId);
 		}
 		
 		int id = intent.getIntExtra(KEY_NOTIFY_ID, 0);
-		PushCallback callback = getPushCallback(id);
 		
 		if(ACTION_ALARM.equals(action)){
 			String ticker = getData(this, id, KEY_TICKER);
 			String title = getData(this, id, KEY_TITLE);
 			String body = getData(this, id, KEY_BODY);
 			showNotification(this, id, ticker, title, body);
-			if(callback != null) callback.onNotificationShowed(id);
+			sendBroadcast(this, id, BROADCAST_TYPE_SHOWED_NOTIFY);
 		} else if(ACTION_NOTIFICATION.equals(action)){
-			if(callback != null) callback.onNotificationClicked(id);
+			sendBroadcast(this, id, BROADCAST_TYPE_CLICKED_NOTIFY);
 		}
 		
 		return super.onStartCommand(intent, flags, startId);
@@ -180,7 +177,7 @@ public class PushService extends Service {
 	}
 	
 	/**
-	 * 返回默认图标的ID
+	 * 返回默认图标的Id
 	 * @param context 上下文对象
 	 * @return
 	 */
@@ -192,5 +189,18 @@ public class PushService extends Service {
 			icon = res.getIdentifier("icon", "drawable", pkg);
 		}
 		return icon;
+	}
+	
+	/**
+	 * 广播消息
+	 * @param context
+	 * @param id
+	 * @param broadcastType
+	 */
+	protected void sendBroadcast(Context context, int id, int broadcastType){
+		Intent intent = new Intent(ACTION_NOTIFICATION);
+		intent.putExtra(KEY_NOTIFY_ID, id);
+		intent.putExtra(KEY_BROADCAST_TYPE, broadcastType);
+		context.sendBroadcast(intent);
 	}
 }
