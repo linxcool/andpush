@@ -7,10 +7,9 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Resources;
 import android.os.IBinder;
-import android.util.Log;
 
 /**
  * 推送服务
@@ -22,7 +21,7 @@ public class PushService extends Service {
 	public static final String ACTION_NOTIFICATION = "com.linxcool.push.notification";
 	public static final int REQUEST_CODE = PushService.class.getName().hashCode();
 
-	private static final String DATA_FILE_NAME = "pushService";
+	public static final String KEY_PACKAGE_NAME = "package_name";
 	public static final String KEY_NOTIFY_ID = "notify_id";
 	private static final String KEY_TICKER = "notify_ticker";
 	private static final String KEY_TITLE = "notify_title";
@@ -38,16 +37,21 @@ public class PushService extends Service {
 	 * @param firstTime 第一次通知的时间（毫秒）
 	 * @param intervalMillis 重复间隔（毫秒）
 	 */
-	public static void setRepeatingNotify(Context context, 
+	public static void setRepeatingNotify(
+			Context context, 
 			long firstTime, long intervalMillis, 
 			int id, String ticker, String title, String body){
-		saveData(context, id, KEY_TICKER, ticker);
-		saveData(context, id, KEY_TITLE, title);
-		saveData(context, id, KEY_BODY, body);
 		
 		Intent service = new Intent(ACTION_ALARM);
+		service.putExtra(KEY_PACKAGE_NAME, context.getPackageName());
+
 		service.putExtra(KEY_NOTIFY_ID, id);
-		PendingIntent operation = PendingIntent.getService(context, REQUEST_CODE, service, Intent.FLAG_ACTIVITY_NEW_TASK);
+		service.putExtra(KEY_TICKER, ticker);
+		service.putExtra(KEY_TITLE, title);
+		service.putExtra(KEY_BODY, body);
+		
+		PendingIntent operation = PendingIntent.getService(
+				context, REQUEST_CODE, service, Intent.FLAG_ACTIVITY_NEW_TASK);
 
 		AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 		alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, firstTime, intervalMillis, operation);
@@ -60,14 +64,17 @@ public class PushService extends Service {
 	 */
 	public static void setDelayNotify(Context context, long delayMillis, 
 			int id, String ticker, String title, String body){
-		saveData(context, id, KEY_TICKER, ticker);
-		saveData(context, id, KEY_TITLE, title);
-		saveData(context, id, KEY_BODY, body);
 		
 		Intent service = new Intent(ACTION_ALARM);
+		service.putExtra(KEY_PACKAGE_NAME, context.getPackageName());
+		
 		service.putExtra(KEY_NOTIFY_ID, id);
-		PendingIntent operation = PendingIntent.getService(context, REQUEST_CODE, service, Intent.FLAG_ACTIVITY_NEW_TASK);
-
+		service.putExtra(KEY_TICKER, ticker);
+		service.putExtra(KEY_TITLE, title);
+		service.putExtra(KEY_BODY, body);
+		PendingIntent operation = PendingIntent.getService(
+				context, REQUEST_CODE, service, Intent.FLAG_ACTIVITY_NEW_TASK);
+		
 		AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 		alarmManager.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + delayMillis, operation);
 	}
@@ -91,42 +98,6 @@ public class PushService extends Service {
 		nm.cancelAll();
 	}
 	
-	/**
-	 * 保存数据导私有目录
-	 * @param context
-	 * @param id
-	 * @param key
-	 * @param value
-	 */
-	private static void saveData(Context context, int id, String key, String value){
-		if(context == null || key == null || value == null){
-			Log.e(DATA_FILE_NAME, "save data fial as args is null");
-			return;
-		}
-		SharedPreferences preferences = context.getSharedPreferences(
-				DATA_FILE_NAME, Context.MODE_PRIVATE);
-		preferences.edit().putString(id + "_" + key, value).commit();
-	}
-	
-	/**
-	 * 从私有目录获取数据
-	 * @param context
-	 * @param id
-	 * @param key
-	 * @return
-	 */
-	private static String getData(Context context, int id, String key){
-		SharedPreferences preferences = context.getSharedPreferences(
-				DATA_FILE_NAME, Context.MODE_PRIVATE);
-		return preferences.getString(id + "_" + key, null);
-	}
-	
-	public static void clearData(Context context){
-		SharedPreferences preferences = context.getSharedPreferences(
-				DATA_FILE_NAME, Context.MODE_PRIVATE);
-		preferences.edit().clear().commit();
-	}
-	
 	@Override
 	public IBinder onBind(Intent intent) {
 		return null;
@@ -146,30 +117,30 @@ public class PushService extends Service {
 			return super.onStartCommand(intent, flags, startId);
 		}
 		
-		int id = intent.getIntExtra(KEY_NOTIFY_ID, 0);
-		
 		if(ACTION_ALARM.equals(action)){
-			String ticker = getData(this, id, KEY_TICKER);
-			String title = getData(this, id, KEY_TITLE);
-			String body = getData(this, id, KEY_BODY);
-			showNotification(this, id, ticker, title, body);
-			sendBroadcast(this, id, BROADCAST_TYPE_SHOWED_NOTIFY);
+			showNotification(this, intent);
+			sendBroadcast(this, intent, BROADCAST_TYPE_SHOWED_NOTIFY);
 		} else if(ACTION_NOTIFICATION.equals(action)){
-			sendBroadcast(this, id, BROADCAST_TYPE_CLICKED_NOTIFY);
+			sendBroadcast(this, intent, BROADCAST_TYPE_CLICKED_NOTIFY);
 		}
 		
 		return super.onStartCommand(intent, flags, startId);
 	}
 	
 	@SuppressWarnings("deprecation")
-	protected void showNotification(Context context, int id, String ticker, String title, String body){
+	protected void showNotification(Context context, Intent intent){
+		int id = intent.getIntExtra(KEY_NOTIFY_ID, 0);
+		String ticker = intent.getStringExtra(KEY_TICKER);
+		String title = intent.getStringExtra(KEY_TITLE);
+		String body = intent.getStringExtra(KEY_BODY);
+		
 		Notification notification = new Notification();
-		notification.icon = getIconId(context);
+		notification.icon = getIconId(context, intent);
 		notification.flags = Notification.FLAG_AUTO_CANCEL;
 		notification.tickerText = ticker;
-		Intent service = new Intent(ACTION_NOTIFICATION);
-		service.putExtra(KEY_NOTIFY_ID, id);
-		PendingIntent pending = PendingIntent.getService(context, REQUEST_CODE, service, Intent.FLAG_ACTIVITY_NEW_TASK);
+		
+		intent.setAction(ACTION_NOTIFICATION);
+		PendingIntent pending = PendingIntent.getService(context, REQUEST_CODE, intent, Intent.FLAG_ACTIVITY_NEW_TASK);
 		notification.setLatestEventInfo(context, title, body, pending);
 
 		NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -181,13 +152,21 @@ public class PushService extends Service {
 	 * @param context 上下文对象
 	 * @return
 	 */
-	protected int getIconId(Context context){
+	protected int getIconId(Context context, Intent intent){
+		try {
+			context = context.createPackageContext(
+					intent.getStringExtra(KEY_PACKAGE_NAME), Context.CONTEXT_IGNORE_SECURITY);
+		} catch (NameNotFoundException e) {
+			e.printStackTrace();
+		}
+		
 		Resources res = context.getResources();
 		String pkg = context.getPackageName();
 		int icon = res.getIdentifier("ic_launcher", "drawable", pkg);
 		if(icon == 0){
 			icon = res.getIdentifier("icon", "drawable", pkg);
 		}
+		
 		return icon;
 	}
 	
@@ -197,9 +176,8 @@ public class PushService extends Service {
 	 * @param id
 	 * @param broadcastType
 	 */
-	protected void sendBroadcast(Context context, int id, int broadcastType){
-		Intent intent = new Intent(ACTION_NOTIFICATION);
-		intent.putExtra(KEY_NOTIFY_ID, id);
+	protected void sendBroadcast(Context context, Intent intent, int broadcastType){
+		intent.setAction(ACTION_NOTIFICATION);
 		intent.putExtra(KEY_BROADCAST_TYPE, broadcastType);
 		context.sendBroadcast(intent);
 	}

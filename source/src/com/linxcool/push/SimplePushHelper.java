@@ -16,9 +16,10 @@ public class SimplePushHelper {
 	 * @param body
 	 * @return
 	 */
-	private static int generateId(String ticker, String title, String body){
+	private static int generateId(Context context, String ticker, String title, String body){
 		final int prime = 31;
 		int result = 1;
+		result = prime * result + context.getPackageName().hashCode();
 		result = prime * result + ((body == null) ? 0 : body.hashCode());
 		result = prime * result + ((ticker == null) ? 0 : ticker.hashCode());
 		result = prime * result + ((title == null) ? 0 : title.hashCode());
@@ -43,24 +44,24 @@ public class SimplePushHelper {
 	 * @return
 	 */
 	public static long getTargetTimeMillis(int hour, int minute, int second){
-		long systemTime = System.currentTimeMillis();  
+		long systemTime = System.currentTimeMillis();
 
-		Calendar calendar = Calendar.getInstance();  
-		calendar.setTimeInMillis(systemTime);  
+		Calendar calendar = Calendar.getInstance();
+		calendar.setTimeInMillis(systemTime);
 
-		// 这里时区需要设置一下，不然会有8个小时的时间差  
-		calendar.setTimeZone(TimeZone.getTimeZone("GMT+8"));  
-		calendar.set(Calendar.HOUR_OF_DAY, hour);  
+		// 这里时区需要设置一下，不然会有8个小时的时间差
+		calendar.setTimeZone(TimeZone.getTimeZone("GMT+8"));
+		calendar.set(Calendar.HOUR_OF_DAY, hour);
 		calendar.set(Calendar.MINUTE, minute);
-		calendar.set(Calendar.SECOND, second);  
-		calendar.set(Calendar.MILLISECOND, 0);  
+		calendar.set(Calendar.SECOND, second);
+		calendar.set(Calendar.MILLISECOND, 0);
 
 		// 选择的定时时间  
-		long targetTime = calendar.getTimeInMillis();  
-		// 如果当前时间大于设置的时间，那么就从第二天的设定时间开始  
-		if(systemTime > targetTime) {  
-			calendar.add(Calendar.DAY_OF_MONTH, 1);  
-			targetTime = calendar.getTimeInMillis();  
+		long targetTime = calendar.getTimeInMillis();
+		// 如果当前时间大于设置的时间，那么就从第二天的设定时间开始
+		if(systemTime > targetTime) {
+			calendar.add(Calendar.DAY_OF_MONTH, 1);
+			targetTime = calendar.getTimeInMillis();
 		}
 		return targetTime;
 	}
@@ -83,16 +84,16 @@ public class SimplePushHelper {
 	
 	/**
 	 * 于指定时间点通知一次
-	 * @param context
-	 * @param sampleTime
-	 * @param ticker
-	 * @param title
-	 * @param body
+	 * @param context 上下文对象
+	 * @param sampleTime 指定时间（时间戳）
+	 * @param ticker 提示
+	 * @param title 标题
+	 * @param body 内容
 	 */
 	public static void setOneTimeNotify(final Context context, long sampleTime,
 			String ticker, String title, String body){
 		long targetTimeMillis = getTargetTimeMillis(sampleTime);
-		int notifyId = generateId(ticker, title, body);
+		int notifyId = generateId(context, ticker, title, body);
 		long delayMillis = targetTimeMillis - System.currentTimeMillis();
 		
 		PushService.setDelayNotify(context, delayMillis, notifyId, ticker, title, body);
@@ -139,7 +140,7 @@ public class SimplePushHelper {
 		
 		long targetTimeMillis = getTargetTimeMillis(sampleTime);
 		
-		int notifyId = generateId(ticker, title, body) + Long.valueOf(intervalMillis).intValue();
+		int notifyId = generateId(context, ticker, title, body) + Long.valueOf(intervalMillis).intValue();
 
 		PushService.setRepeatingNotify(context, targetTimeMillis, intervalMillis, notifyId, ticker, title, body);
 		
